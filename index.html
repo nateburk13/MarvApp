@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily Ashton</title>
+<meta name="theme-color" content="#14213d">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Daily Ashton">
+<style>
+  :root{
+    --ink:#14213d;
+    --ink-deep:#0c162c;
+    --parchment:#f6efe1;
+    --parchment-line:#e4d8bd;
+    --gold:#b98b3e;
+    --gold-soft:#d9b877;
+    --ember:#8f4a3a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100vh;
+    min-height:100dvh;
+    background:
+      radial-gradient(circle at 50% -10%, #1c2c52 0%, var(--ink) 45%, var(--ink-deep) 100%);
+    font-family: 'Iowan Old Style', 'Georgia', ui-serif, serif;
+    color: var(--parchment);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: env(safe-area-inset-top,20px) 18px env(safe-area-inset-bottom,20px);
+    overflow-x:hidden;
+  }
+  .stage{
+    width:100%;
+    max-width:430px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:18px;
+  }
+  .datebar{
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:11px;
+    color: var(--gold-soft);
+    opacity:.85;
+    text-align:center;
+  }
+  .card{
+    position:relative;
+    width:100%;
+    background: var(--parchment);
+    color:#241a0e;
+    border-radius: 18px;
+    padding: 30px 26px 26px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,.55), 0 2px 0 rgba(255,255,255,.04) inset;
+    cursor:pointer;
+    transition: transform .45s cubic-bezier(.2,.8,.2,1);
+    -webkit-user-select:none;
+    user-select:none;
+    overflow:hidden;
+  }
+  .card::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.015) 0 1px, transparent 1px 3px);
+    pointer-events:none;
+  }
+  .card:active{ transform: scale(.985); }
+  .ribbon{
+    position:absolute; top:0; right:26px;
+    width:14px; height:46px;
+    background: linear-gradient(180deg, var(--ember), #6f3a2e);
+    clip-path: polygon(0 0,100% 0,100% 100%,50% 78%,0 100%);
+    box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  }
+  .portrait{
+    width:96px; height:96px;
+    margin: 4px auto 16px;
+    border-radius:50%;
+    background: linear-gradient(160deg, #d8c69a, #b98b3e 60%, #8a672c);
+    display:flex; align-items:center; justify-content:center;
+    border: 3px solid var(--gold);
+    box-shadow: 0 6px 18px rgba(90,60,20,.35);
+    overflow:hidden;
+  }
+  .portrait img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .portrait svg{ width:56%; height:56%; opacity:.75; }
+  .quote-mark{
+    font-family: Georgia, serif;
+    font-size:54px;
+    line-height:.4;
+    color: var(--gold);
+    opacity:.55;
+    display:block;
+    margin-bottom: 6px;
+  }
+  .quote-text{
+    font-size: 22px;
+    line-height:1.42;
+    font-weight:500;
+    letter-spacing:.1px;
+  }
+  .attribution{
+    margin-top:18px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+  }
+  .attribution .line{ flex:1; height:1px; background: var(--parchment-line); }
+  .attribution .name{
+    font-size:12.5px;
+    letter-spacing:.06em;
+    color:#6b5a3a;
+    white-space:nowrap;
+    text-transform:uppercase;
+  }
+  .source{
+    margin-top:8px;
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    font-size:11.5px;
+    color:#a08a5c;
+    font-style:italic;
+  }
+  .hint{
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    font-size:12px;
+    color: rgba(246,239,225,.45);
+    text-align:center;
+  }
+  .controls{
+    display:flex;
+    gap:10px;
+    width:100%;
+  }
+  button{
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:.03em;
+    padding: 13px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(217,184,119,.35);
+    background: rgba(255,255,255,.04);
+    color: var(--gold-soft);
+    flex:1;
+    cursor:pointer;
+    transition: background .2s ease, transform .1s ease;
+  }
+  button:active{ transform: scale(.97); background: rgba(255,255,255,.09); }
+  button.primary{
+    background: linear-gradient(160deg, var(--gold-soft), var(--gold));
+    color: var(--ink-deep);
+    border: none;
+  }
+  .toast{
+    position:fixed;
+    bottom: calc(24px + env(safe-area-inset-bottom,0px));
+    left:50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--parchment);
+    color:#241a0e;
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    font-size:13px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    opacity:0;
+    pointer-events:none;
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 360px){
+    .quote-text{ font-size:20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="datebar" id="datebar"></div>
+
+  <div class="card" id="card">
+    <div class="ribbon"></div>
+    <div class="portrait" id="portrait">
+      <!-- Placeholder silhouette. Replace this <svg> with an
+           <img src="ashton.jpg"> of an authorized photo if you have one. -->
+      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="38" r="20" fill="#4a3419"/>
+        <path d="M15 95c3-24 18-38 35-38s32 14 35 38" fill="#4a3419"/>
+      </svg>
+    </div>
+    <span class="quote-mark">&ldquo;</span>
+    <div class="quote-text" id="quoteText">Loading today&rsquo;s quote&hellip;</div>
+    <div class="attribution">
+      <div class="line"></div>
+      <div class="name">Marvin J. Ashton</div>
+      <div class="line"></div>
+    </div>
+    <div class="source" id="quoteSource"></div>
+  </div>
+
+  <div class="hint">Tap the card for another quote</div>
+
+  <div class="controls">
+    <button id="notifyBtn">Enable Reminder</button>
+    <button id="shareBtn" class="primary">Share Quote</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---- Quote data (verified, publicly attributed quotes from talks & books) ----
+const QUOTES = [
+  { text: "Be the one who nurtures and builds. Be the one who has an understanding and a forgiving heart, one who looks for the best in people.", source: "Be of Good Cheer, 1987" },
+  { text: "Leave people better than you found them.", source: "Be of Good Cheer, 1987" },
+  { text: "A true friend is one who not only is willing to love us the way we are, but is able to leave us better than he found us.", source: "General Conference" },
+  { text: "Pleasure usually takes the form of me and now; joy is us and always.", source: "General Conference" },
+  { text: "Greatness is best measured by how well an individual responds to the happenings in life that appear to be totally unfair, unreasonable, and undeserved.", source: "Be of Good Cheer, 1987" },
+  { text: "Being of good cheer makes it possible for us to turn all of our sunsets into sunrises.", source: "General Conference" },
+  { text: "The difference between those who are committed and those who are not is the difference between the words want and will.", source: "General Conference" },
+  { text: "Striving can be more important than arriving.", source: "General Conference" },
+  { text: "You can never get enough of the things you don't need, because the things you don't need can never satisfy.", source: "General Conference" },
+  { text: "True happiness is not made in getting something; true happiness is becoming something.", source: "General Conference" },
+  { text: "Tact is rubbing out another's mistakes, not rubbing them in.", source: "Ye Are My Friends, 1982" },
+  { text: "Wise is the man who says what needs to be said, but not all that could be said.", source: "General Conference" },
+  { text: "Victories in life come through our ability to work around and over the obstacles that cross our path. We grow stronger as we climb our own mountains.", source: "General Conference" },
+  { text: "None of us need one more person bashing or pointing out where we have failed or fallen short.", source: "General Conference" },
+  { text: "The best and most clear indicator that we are progressing spiritually and coming unto Christ is the way we treat other people.", source: "General Conference" },
+  { text: "Faith is not so much something we believe; faith is something we live.", source: "General Conference" },
+  { text: "Real charity is not something you give away; it is something that you acquire and make a part of yourself.", source: "Know He Is There, Ensign, Feb. 1994" },
+  { text: "A friend is a possession we earn, not a gift.", source: "What Is a Friend? Ensign, Jan. 1973" },
+  { text: "Love should be a vehicle allowed to travel without limitations.", source: "General Conference" },
+  { text: "Sometimes when family members least deserve love, they need it most.", source: "General Conference" },
+  { text: "If we could look into each other's hearts and understand the unique challenges each of us faces, I think we would treat each other much more gently.", source: "General Conference" },
+  { text: "Do not allow yourselves to be made to feel inadequate or frustrated because you cannot do everything others seem to be accomplishing.", source: "General Conference" },
+  { text: "Enduring, or carrying on, is not just a matter of tolerating circumstances and hanging in there, but of pressing forward.", source: "General Conference" },
+  { text: "One little lie or dishonest act leads to another until the perpetrator is caught in the web of deceit.", source: "Ye Are My Friends, 1982" },
+  { text: "We need to come to terms with our desire to reach perfection and with our frustration when our accomplishments or our behaviors are less than perfect.", source: "Road Blocks to Progress" }
+];
+
+// ---- Deterministic "quote of the day" based on today's date ----
+function dayIndex(date){
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date - start;
+  return Math.floor(diff / 86400000);
+}
+function todaysQuote(){
+  const idx = dayIndex(new Date()) % QUOTES.length;
+  return QUOTES[idx];
+}
+function randomQuote(exclude){
+  let q;
+  do { q = QUOTES[Math.floor(Math.random()*QUOTES.length)]; }
+  while (QUOTES.length > 1 && q.text === exclude);
+  return q;
+}
+
+const quoteText = document.getElementById('quoteText');
+const quoteSource = document.getElementById('quoteSource');
+const card = document.getElementById('card');
+const datebar = document.getElementById('datebar');
+
+function render(q){
+  quoteText.textContent = q.text;
+  quoteSource.textContent = q.source;
+}
+
+datebar.textContent = new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
+render(todaysQuote());
+
+card.addEventListener('click', () => {
+  card.style.transform = 'scale(.96)';
+  setTimeout(() => { card.style.transform = ''; }, 150);
+  render(randomQuote(quoteText.textContent));
+});
+
+// ---- Share ----
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  const text = `"${quoteText.textContent}" — Marvin J. Ashton`;
+  if (navigator.share) {
+    try { await navigator.share({ text }); } catch(e) {}
+  } else {
+    await navigator.clipboard.writeText(text);
+    showToast('Quote copied to clipboard');
+  }
+});
+
+// ---- Notifications ----
+const notifyBtn = document.getElementById('notifyBtn');
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+async function setupNotifications(){
+  if (!('Notification' in window)) {
+    showToast('Notifications aren\'t supported here');
+    return;
+  }
+  let permission = Notification.permission;
+  if (permission === 'default') {
+    permission = await Notification.requestPermission();
+  }
+  if (permission === 'granted') {
+    localStorage.setItem('ashton-notify', 'on');
+    notifyBtn.textContent = 'Reminder On';
+    showToast('Daily reminder enabled');
+    scheduleLocalReminder();
+  } else {
+    showToast('Notifications were not allowed');
+  }
+}
+
+// Schedules a same-day local notification while the app/tab stays open,
+// and re-arms itself for the next day. True background delivery on iOS
+// requires the installed home-screen app plus a push server (see note below).
+function scheduleLocalReminder(){
+  const now = new Date();
+  const next = new Date();
+  next.setHours(9, 0, 0, 0); // 9:00 AM reminder
+  if (next <= now) next.setDate(next.getDate() + 1);
+  const ms = next - now;
+  setTimeout(() => {
+    if (Notification.permission === 'granted') {
+      const q = todaysQuote();
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification('Marvin J. Ashton', {
+            body: q.text,
+            icon: 'icon-192.png',
+            badge: 'icon-192.png'
+          });
+        });
+      } else {
+        new Notification('Marvin J. Ashton', { body: q.text });
+      }
+    }
+    scheduleLocalReminder();
+  }, ms);
+}
+
+notifyBtn.addEventListener('click', setupNotifications);
+
+if (localStorage.getItem('ashton-notify') === 'on' && Notification.permission === 'granted') {
+  notifyBtn.textContent = 'Reminder On';
+  scheduleLocalReminder();
+}
+
+// ---- Register service worker (enables install + notification display) ----
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
