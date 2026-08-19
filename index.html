@@ -221,34 +221,31 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ---- Quote data (verified, publicly attributed quotes from talks & books) ----
-const QUOTES = [
-  { text: "Be the one who nurtures and builds. Be the one who has an understanding and a forgiving heart, one who looks for the best in people.", source: "Be of Good Cheer, 1987" },
-  { text: "Leave people better than you found them.", source: "Be of Good Cheer, 1987" },
-  { text: "A true friend is one who not only is willing to love us the way we are, but is able to leave us better than he found us.", source: "General Conference" },
-  { text: "Pleasure usually takes the form of me and now; joy is us and always.", source: "General Conference" },
-  { text: "Greatness is best measured by how well an individual responds to the happenings in life that appear to be totally unfair, unreasonable, and undeserved.", source: "Be of Good Cheer, 1987" },
-  { text: "Being of good cheer makes it possible for us to turn all of our sunsets into sunrises.", source: "General Conference" },
-  { text: "The difference between those who are committed and those who are not is the difference between the words want and will.", source: "General Conference" },
-  { text: "Striving can be more important than arriving.", source: "General Conference" },
-  { text: "You can never get enough of the things you don't need, because the things you don't need can never satisfy.", source: "General Conference" },
-  { text: "True happiness is not made in getting something; true happiness is becoming something.", source: "General Conference" },
-  { text: "Tact is rubbing out another's mistakes, not rubbing them in.", source: "Ye Are My Friends, 1982" },
-  { text: "Wise is the man who says what needs to be said, but not all that could be said.", source: "General Conference" },
-  { text: "Victories in life come through our ability to work around and over the obstacles that cross our path. We grow stronger as we climb our own mountains.", source: "General Conference" },
-  { text: "None of us need one more person bashing or pointing out where we have failed or fallen short.", source: "General Conference" },
-  { text: "The best and most clear indicator that we are progressing spiritually and coming unto Christ is the way we treat other people.", source: "General Conference" },
-  { text: "Faith is not so much something we believe; faith is something we live.", source: "General Conference" },
-  { text: "Real charity is not something you give away; it is something that you acquire and make a part of yourself.", source: "Know He Is There, Ensign, Feb. 1994" },
-  { text: "A friend is a possession we earn, not a gift.", source: "What Is a Friend? Ensign, Jan. 1973" },
-  { text: "Love should be a vehicle allowed to travel without limitations.", source: "General Conference" },
-  { text: "Sometimes when family members least deserve love, they need it most.", source: "General Conference" },
-  { text: "If we could look into each other's hearts and understand the unique challenges each of us faces, I think we would treat each other much more gently.", source: "General Conference" },
-  { text: "Do not allow yourselves to be made to feel inadequate or frustrated because you cannot do everything others seem to be accomplishing.", source: "General Conference" },
-  { text: "Enduring, or carrying on, is not just a matter of tolerating circumstances and hanging in there, but of pressing forward.", source: "General Conference" },
-  { text: "One little lie or dishonest act leads to another until the perpetrator is caught in the web of deceit.", source: "Ye Are My Friends, 1982" },
-  { text: "We need to come to terms with our desire to reach perfection and with our frustration when our accomplishments or our behaviors are less than perfect.", source: "Road Blocks to Progress" }
-];
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// ---- Quote data lives in quotes.json, loaded at startup ----
+let QUOTES = [];
+const FALLBACK_QUOTE = { text: "Leave people better than you found them.", source: "Be of Good Cheer, 1987" };
+
+async function loadQuotes(){
+  try {
+    const res = await fetch('quotes.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) throw new Error('empty');
+    QUOTES = data;
+  } catch (e) {
+    QUOTES = [FALLBACK_QUOTE];
+    showToast('Couldn\'t load quotes.json — showing a fallback quote');
+  }
+  datebar.textContent = new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
+  render(todaysQuote());
+}
 
 // ---- Deterministic "quote of the day" based on today's date ----
 function dayIndex(date){
@@ -277,9 +274,6 @@ function render(q){
   quoteSource.textContent = q.source;
 }
 
-datebar.textContent = new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
-render(todaysQuote());
-
 card.addEventListener('click', () => {
   card.style.transform = 'scale(.96)';
   setTimeout(() => { card.style.transform = ''; }, 150);
@@ -299,13 +293,6 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
 
 // ---- Notifications ----
 const notifyBtn = document.getElementById('notifyBtn');
-
-function showToast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2600);
-}
 
 async function setupNotifications(){
   if (!('Notification' in window)) {
@@ -360,6 +347,8 @@ if (localStorage.getItem('ashton-notify') === 'on' && Notification.permission ==
   notifyBtn.textContent = 'Reminder On';
   scheduleLocalReminder();
 }
+
+loadQuotes();
 
 // ---- Register service worker (enables install + notification display) ----
 if ('serviceWorker' in navigator) {
