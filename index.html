@@ -10,6 +10,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Daily Ashton">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <style>
   :root{
     --ink:#14213d;
@@ -216,6 +218,12 @@
     <button id="notifyBtn">Enable Reminder</button>
     <button id="shareBtn" class="primary">Share Quote</button>
   </div>
+
+  <div id="tokenBox" style="display:none; width:100%;">
+    <div class="hint" style="margin-bottom:6px;">Copy this into your FCM_TOKEN GitHub secret:</div>
+    <textarea id="tokenText" readonly style="width:100%; min-height:70px; font-family:monospace; font-size:11px; padding:10px; border-radius:10px; border:1px solid rgba(217,184,119,.35); background:rgba(255,255,255,.06); color:#f6efe1; resize:none;"></textarea>
+    <button id="copyTokenBtn" style="width:100%; margin-top:8px;">Copy Token</button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -291,71 +299,98 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   }
 });
 
-// ---- Notifications ----
+// ---- Firebase Cloud Messaging (handled in the module script below) ----
 const notifyBtn = document.getElementById('notifyBtn');
+const tokenBox = document.getElementById('tokenBox');
+const tokenText = document.getElementById('tokenText');
+
+window.__showToast = showToast;
+
+window.__showFcmToken = function(token){
+  notifyBtn.textContent = 'Reminder On';
+  tokenText.value = token;
+  tokenBox.style.display = 'block';
+  showToast('Copy this token into your FCM_TOKEN secret');
+};
+
+document.getElementById('copyTokenBtn').addEventListener('click', async () => {
+  tokenText.select();
+  try {
+    await navigator.clipboard.writeText(tokenText.value);
+    showToast('Token copied');
+  } catch (e) {
+    showToast('Select the text and copy manually');
+  }
+});
 
 async function setupNotifications(){
-  if (!('Notification' in window)) {
-    showToast('Notifications aren\'t supported here');
-    return;
-  }
-  let permission = Notification.permission;
-  if (permission === 'default') {
-    permission = await Notification.requestPermission();
-  }
-  if (permission === 'granted') {
-    localStorage.setItem('ashton-notify', 'on');
-    notifyBtn.textContent = 'Reminder On';
-    showToast('Daily reminder enabled');
-    scheduleLocalReminder();
-  } else {
-    showToast('Notifications were not allowed');
-  }
-}
-
-// Schedules a same-day local notification while the app/tab stays open,
-// and re-arms itself for the next day. True background delivery on iOS
-// requires the installed home-screen app plus a push server (see note below).
-function scheduleLocalReminder(){
-  const now = new Date();
-  const next = new Date();
-  next.setHours(9, 0, 0, 0); // 9:00 AM reminder
-  if (next <= now) next.setDate(next.getDate() + 1);
-  const ms = next - now;
-  setTimeout(() => {
-    if (Notification.permission === 'granted') {
-      const q = todaysQuote();
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification('Marvin J. Ashton', {
-            body: q.text,
-            icon: 'icon-192.png',
-            badge: 'icon-192.png'
-          });
-        });
-      } else {
-        new Notification('Marvin J. Ashton', { body: q.text });
-      }
-    }
-    scheduleLocalReminder();
-  }, ms);
+  notifyBtn.disabled = true;
+  notifyBtn.textContent = 'Requesting…';
+  await window.__enableFcmReminder();
+  notifyBtn.disabled = false;
 }
 
 notifyBtn.addEventListener('click', setupNotifications);
 
-if (localStorage.getItem('ashton-notify') === 'on' && Notification.permission === 'granted') {
-  notifyBtn.textContent = 'Reminder On';
-  scheduleLocalReminder();
-}
-
 loadQuotes();
 
-// ---- Register service worker (enables install + notification display) ----
+// ---- Register service worker (enables install + offline caching) ----
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+</script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-messaging.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAdedktBmRawkD6RlL1RLRKup9laCJ8hzs",
+    authDomain: "marvapp-76545.firebaseapp.com",
+    projectId: "marvapp-76545",
+    storageBucket: "marvapp-76545.firebasestorage.app",
+    messagingSenderId: "559243595666",
+    appId: "1:559243595666:web:0a909be225ce96f4b13b4b"
+  };
+  const VAPID_KEY = "BKa8oGcuWX9I-AeK1_8eAgmvPqStDGEiMqBDL70METE2wMWgD68s4RLtcuwDn0WCHVYzywtfdu-4GpER_eLbLZw";
+
+  const firebaseApp = initializeApp(firebaseConfig);
+  let messaging;
+  try { messaging = getMessaging(firebaseApp); } catch (e) { /* unsupported browser */ }
+
+  window.__enableFcmReminder = async function () {
+    if (!messaging) {
+      window.__showToast('Push isn\'t supported in this browser');
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        window.__showToast('Notifications were not allowed');
+        return;
+      }
+      const swReg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+      const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
+      if (!token) {
+        window.__showToast('Could not get a device token');
+        return;
+      }
+      window.__showFcmToken(token);
+    } catch (err) {
+      console.error(err);
+      window.__showToast('Something went wrong enabling notifications');
+    }
+  };
+
+  // Foreground messages (app open and in view)
+  if (messaging) {
+    onMessage(messaging, (payload) => {
+      const body = payload.notification?.body || '';
+      if (body) window.__showToast(body);
+    });
+  }
 </script>
 </body>
 </html>

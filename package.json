@@ -1,0 +1,12 @@
+{
+  "name": "marvapp-daily-quote-sender",
+  "private": true,
+  "version": "1.0.0",
+  "description": "GitHub Actions helper that sends today's quote via Firebase Cloud Messaging",
+  "scripts": {
+    "send-quote": "node scripts/send-daily-quote.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.5.0"
+  }
+}
