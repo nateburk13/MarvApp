@@ -371,7 +371,12 @@ if ('serviceWorker' in navigator) {
         window.__showToast('Notifications were not allowed');
         return;
       }
-      const swReg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+      // Use the single, already-registered sw.js (which now also handles
+      // Firebase Cloud Messaging) instead of registering a second service
+      // worker at the same scope — that used to cause the two workers to
+      // silently replace each other and orphan the push subscription.
+      const swReg = await navigator.serviceWorker.register('sw.js');
+      await navigator.serviceWorker.ready;
       const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
       if (!token) {
         window.__showToast('Could not get a device token');
