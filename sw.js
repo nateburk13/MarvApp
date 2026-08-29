@@ -1,59 +1,83 @@
-// Single service worker: handles BOTH offline caching AND Firebase Cloud
-// Messaging push notifications. These used to be two separate files
-// (sw.js + firebase-messaging-sw.js) registered at the same scope, which
-// caused them to silently replace one another on every app reopen and
-// orphan the push subscription (showing up as "NotRegistered" on send).
-// Keeping everything in one file avoids that scope conflict entirely.
+// Sends today's quote as a push notification via Firebase Cloud Messaging,
+// to every device token listed in the FCM_TOKENS secret.
 
-const CACHE = 'daily-ashton-v3';
-const ASSETS = ['./index.html', './manifest.json', './quotes.json', './icon-192.png', './icon-512.png'];
+const admin = require('firebase-admin');
+const fs = require('fs');
+const path = require('path');
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{}));
-  self.skipWaiting();
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+const rawTokens = process.env.FCM_TOKENS || '';
+
+// Accept tokens separated by commas, newlines, or a mix of both.
+const tokens = rawTokens
+  .split(/[\n,]/)
+  .map(t => t.trim())
+  .filter(Boolean);
+
+if (tokens.length === 0) {
+  console.error('FCM_TOKENS secret is empty. Nothing to send to.');
+  process.exit(1);
+}
+
+// TEMPORARY DEBUG: confirm what's actually being read, without exposing the full token.
+tokens.forEach((t, i) => {
+  console.log(`DEBUG Token #${i + 1}: length=${t.length}, starts="${t.slice(0, 8)}", ends="${t.slice(-8)}"`);
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(self.clients.claim());
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
 });
 
-self.addEventListener('fetch', (e) => {
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
-  );
-});
+function dayIndex(date) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date - start;
+  return Math.floor(diff / 86400000);
+}
 
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then(list => {
-      if (list.length > 0) return list[0].focus();
-      return self.clients.openWindow('./index.html');
-    })
-  );
-});
+function todaysQuote(quotes) {
+  const idx = dayIndex(new Date()) % quotes.length;
+  return quotes[idx];
+}
 
-// ---- Firebase Cloud Messaging (background push handling) ----
-importScripts('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging-compat.js');
+async function main() {
+  const quotesPath = path.join(__dirname, '..', 'quotes.json');
+  const quotes = JSON.parse(fs.readFileSync(quotesPath, 'utf8'));
+  if (!Array.isArray(quotes) || quotes.length === 0) {
+    throw new Error('quotes.json is empty or invalid');
+  }
+  const quote = todaysQuote(quotes);
 
-firebase.initializeApp({
-  apiKey: "AIzaSyByENHdwEs3ggfkRXQe-kH1XyYP7tjabP8",
-  authDomain: "marvappv2.firebaseapp.com",
-  projectId: "marvappv2",
-  storageBucket: "marvappv2.firebasestorage.app",
-  messagingSenderId: "406149808601",
-  appId: "1:406149808601:web:2dbbd9a2afdbe8e9c8d9c8"
-});
+  console.log(`Sending to ${tokens.length} device(s). Quote: "${quote.text}"`);
 
-const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || 'Marvin J. Ashton';
-  const body = payload.notification?.body || '';
-  self.registration.showNotification(title, {
-    body,
-    icon: 'icon-192.png',
-    badge: 'icon-192.png'
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens,
+    // Data-only payload (no top-level "notification" field). Sending a
+    // "notification" payload causes some browsers to auto-display it
+    // AND have onBackgroundMessage/push handlers display it again,
+    // resulting in duplicate notifications. Data-only means sw.js is
+    // fully responsible for building and showing the notification once.
+    data: {
+      title: 'Marvin J. Ashton',
+      body: quote.text
+    },
+    webpush: {
+      fcmOptions: {
+        link: '/'
+      }
+    }
   });
+
+  console.log(`Success: ${response.successCount}, Failure: ${response.failureCount}`);
+
+  response.responses.forEach((result, i) => {
+    if (!result.success) {
+      console.warn(`Token #${i + 1} failed: ${result.error?.message || 'unknown error'}`);
+      console.warn('If this says the token is invalid/unregistered, that device likely needs to re-enable notifications and you should replace its entry in FCM_TOKENS.');
+    }
+  });
+}
+
+main().catch((err) => {
+  console.error('Failed to send notifications:', err);
+  process.exit(1);
 });
