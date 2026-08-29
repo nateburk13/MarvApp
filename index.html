@@ -10,8 +10,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Daily Ashton">
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging-compat.js"></script>
 <style>
   :root{
     --ink:#14213d;
@@ -343,18 +343,18 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-messaging.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js";
 
   const firebaseConfig = {
-    apiKey: "AIzaSyAdedktBmRawkD6RlL1RLRKup9laCJ8hzs",
-    authDomain: "marvapp-76545.firebaseapp.com",
-    projectId: "marvapp-76545",
-    storageBucket: "marvapp-76545.firebasestorage.app",
-    messagingSenderId: "559243595666",
-    appId: "1:559243595666:web:0a909be225ce96f4b13b4b"
+    apiKey: "AIzaSyByENHdwEs3ggfkRXQe-kH1XyYP7tjabP8",
+    authDomain: "marvappv2.firebaseapp.com",
+    projectId: "marvappv2",
+    storageBucket: "marvappv2.firebasestorage.app",
+    messagingSenderId: "406149808601",
+    appId: "1:406149808601:web:2dbbd9a2afdbe8e9c8d9c8"
   };
-  const VAPID_KEY = "BKa8oGcuWX9I-AeK1_8eAgmvPqStDGEiMqBDL70METE2wMWgD68s4RLtcuwDn0WCHVYzywtfdu-4GpER_eLbLZw";
+  const VAPID_KEY = "PASTE_YOUR_NEW_VAPID_KEY_HERE"; // Get this from marvappv2 project settings → Cloud Messaging → Web Push certificates
 
   const firebaseApp = initializeApp(firebaseConfig);
   let messaging;

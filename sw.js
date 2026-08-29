@@ -34,16 +34,16 @@ self.addEventListener('notificationclick', (e) => {
 });
 
 // ---- Firebase Cloud Messaging (background push handling) ----
-importScripts('https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.13.1/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: "AIzaSyAdedktBmRawkD6RlL1RLRKup9laCJ8hzs",
-  authDomain: "marvapp-76545.firebaseapp.com",
-  projectId: "marvapp-76545",
-  storageBucket: "marvapp-76545.firebasestorage.app",
-  messagingSenderId: "559243595666",
-  appId: "1:559243595666:web:0a909be225ce96f4b13b4b"
+  apiKey: "AIzaSyByENHdwEs3ggfkRXQe-kH1XyYP7tjabP8",
+  authDomain: "marvappv2.firebaseapp.com",
+  projectId: "marvappv2",
+  storageBucket: "marvappv2.firebasestorage.app",
+  messagingSenderId: "406149808601",
+  appId: "1:406149808601:web:2dbbd9a2afdbe8e9c8d9c8"
 });
 
 const messaging = firebase.messaging();
