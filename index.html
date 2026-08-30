@@ -141,9 +141,73 @@
   }
   .controls{
     display:flex;
+    align-items:center;
     gap:10px;
     width:100%;
   }
+  .reminder-toggle{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex:1;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(217,184,119,.35);
+    background: rgba(255,255,255,.04);
+  }
+  .reminder-toggle .label{
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:.03em;
+    color: var(--gold-soft);
+    flex:1;
+  }
+  .switch{
+    position:relative;
+    width:46px;
+    height:26px;
+    flex-shrink:0;
+  }
+  .switch input{
+    opacity:0;
+    width:0;
+    height:0;
+  }
+  .switch .track{
+    position:absolute;
+    inset:0;
+    background: rgba(255,255,255,.15);
+    border-radius:999px;
+    cursor:pointer;
+    transition: background .2s ease;
+  }
+  .switch .track::before{
+    content:"";
+    position:absolute;
+    height:20px; width:20px;
+    left:3px; top:3px;
+    background: var(--parchment);
+    border-radius:50%;
+    transition: transform .2s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3);
+  }
+  .switch input:checked + .track{
+    background: linear-gradient(160deg, var(--gold-soft), var(--gold));
+  }
+  .switch input:checked + .track::before{
+    transform: translateX(20px);
+  }
+  .switch input:disabled + .track{
+    opacity:.5;
+    cursor:default;
+  }
+  .source-link{
+    color:inherit;
+    text-decoration:none;
+    border-bottom: 1px dotted #a08a5c;
+  }
+  .source-link:active{ opacity:.7; }
   button{
     font-family: -apple-system, 'Helvetica Neue', sans-serif;
     font-size:13px;
@@ -215,14 +279,14 @@
   <div class="hint">Tap the card for another quote</div>
 
   <div class="controls">
-    <button id="notifyBtn">Enable Reminder</button>
-    <button id="shareBtn" class="primary">Share Quote</button>
-  </div>
-
-  <div id="tokenBox" style="display:none; width:100%;">
-    <div class="hint" style="margin-bottom:6px;">Copy this into your FCM_TOKEN GitHub secret:</div>
-    <textarea id="tokenText" readonly style="width:100%; min-height:70px; font-family:monospace; font-size:11px; padding:10px; border-radius:10px; border:1px solid rgba(217,184,119,.35); background:rgba(255,255,255,.06); color:#f6efe1; resize:none;"></textarea>
-    <button id="copyTokenBtn" style="width:100%; margin-top:8px;">Copy Token</button>
+    <label class="reminder-toggle">
+      <span class="label" id="reminderLabel">Daily Reminder</span>
+      <span class="switch">
+        <input type="checkbox" id="notifyToggle">
+        <span class="track"></span>
+      </span>
+    </label>
+    <button id="shareBtn" class="primary">Share</button>
   </div>
 </div>
 
@@ -279,10 +343,17 @@ const datebar = document.getElementById('datebar');
 
 function render(q){
   quoteText.textContent = q.text;
-  quoteSource.textContent = q.source;
+  // Link the source to a search for the exact quote + source, so tapping
+  // it pulls up the talk or book for further reading. We link to a search
+  // rather than a hardcoded URL per quote, since that stays accurate even
+  // if a specific page moves.
+  const searchQuery = encodeURIComponent(`"${q.text}" Marvin J. Ashton ${q.source}`);
+  const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+  quoteSource.innerHTML = `<a class="source-link" href="${searchUrl}" target="_blank" rel="noopener">${q.source}</a>`;
 }
 
-card.addEventListener('click', () => {
+card.addEventListener('click', (e) => {
+  if (e.target.closest('.source-link')) return; // let the link open normally
   card.style.transform = 'scale(.96)';
   setTimeout(() => { card.style.transform = ''; }, 150);
   render(randomQuote(quoteText.textContent));
@@ -300,37 +371,26 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
 });
 
 // ---- Firebase Cloud Messaging (handled in the module script below) ----
-const notifyBtn = document.getElementById('notifyBtn');
-const tokenBox = document.getElementById('tokenBox');
-const tokenText = document.getElementById('tokenText');
+const notifyToggle = document.getElementById('notifyToggle');
 
 window.__showToast = showToast;
 
-window.__showFcmToken = function(token){
-  notifyBtn.textContent = 'Reminder On';
-  tokenText.value = token;
-  tokenBox.style.display = 'block';
-  showToast('Copy this token into your FCM_TOKEN secret');
-};
-
-document.getElementById('copyTokenBtn').addEventListener('click', async () => {
-  tokenText.select();
-  try {
-    await navigator.clipboard.writeText(tokenText.value);
-    showToast('Token copied');
-  } catch (e) {
-    showToast('Select the text and copy manually');
-  }
-});
-
-async function setupNotifications(){
-  notifyBtn.disabled = true;
-  notifyBtn.textContent = 'Requesting…';
-  await window.__enableFcmReminder();
-  notifyBtn.disabled = false;
+// Reflect saved on/off state as soon as the page loads, before Firebase
+// has finished initializing, so the switch doesn't flash in the wrong state.
+if (localStorage.getItem('dailyAshtonReminderEnabled') === 'true') {
+  notifyToggle.checked = true;
 }
 
-notifyBtn.addEventListener('click', setupNotifications);
+notifyToggle.addEventListener('change', async () => {
+  notifyToggle.disabled = true;
+  if (notifyToggle.checked) {
+    const ok = await window.__enableFcmReminder();
+    if (!ok) notifyToggle.checked = false; // revert if it failed
+  } else {
+    await window.__disableFcmReminder();
+  }
+  notifyToggle.disabled = false;
+});
 
 loadQuotes();
 
@@ -345,6 +405,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
   import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging.js";
+  import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyByENHdwEs3ggfkRXQe-kH1XyYP7tjabP8",
@@ -357,19 +418,35 @@ if ('serviceWorker' in navigator) {
   const VAPID_KEY = "BNv_NhLWIO4LUtI4M3qItzrIRpn2TGl5UNrukHyTNKmK_Z5QPCSEW6lXu86wuW2AlbFeEe1WHT9zQga5oonPNj0"; // Get this from marvappv2 project settings → Cloud Messaging → Web Push certificates
 
   const firebaseApp = initializeApp(firebaseConfig);
+  const db = getFirestore(firebaseApp);
   let messaging;
   try { messaging = getMessaging(firebaseApp); } catch (e) { /* unsupported browser */ }
 
+  // Each browser/device gets a stable random ID (kept in localStorage) so
+  // that toggling the reminder on and off always updates the SAME Firestore
+  // document, instead of creating a new subscriber every time.
+  function getDeviceId(){
+    let id = localStorage.getItem('dailyAshtonDeviceId');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('dailyAshtonDeviceId', id);
+    }
+    return id;
+  }
+
+  // Turns the reminder ON: gets a fresh push token and saves it to
+  // Firestore as enabled. The daily GitHub Actions job reads straight from
+  // Firestore, so there's no token to copy anywhere.
   window.__enableFcmReminder = async function () {
     if (!messaging) {
       window.__showToast('Push isn\'t supported in this browser');
-      return;
+      return false;
     }
     try {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         window.__showToast('Notifications were not allowed');
-        return;
+        return false;
       }
       // Use the single, already-registered sw.js (which now also handles
       // Firebase Cloud Messaging) instead of registering a second service
@@ -380,19 +457,43 @@ if ('serviceWorker' in navigator) {
       const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
       if (!token) {
         window.__showToast('Could not get a device token');
-        return;
+        return false;
       }
-      window.__showFcmToken(token);
+      await setDoc(doc(db, 'subscribers', getDeviceId()), {
+        token,
+        enabled: true,
+        updatedAt: serverTimestamp()
+      });
+      localStorage.setItem('dailyAshtonReminderEnabled', 'true');
+      window.__showToast('Daily reminder turned on');
+      return true;
     } catch (err) {
       console.error(err);
       window.__showToast('Something went wrong enabling notifications');
+      return false;
+    }
+  };
+
+  // Turns the reminder OFF: marks the Firestore doc inactive (kept, not
+  // deleted, so there's a history) so the daily send skips this device.
+  window.__disableFcmReminder = async function () {
+    try {
+      await setDoc(doc(db, 'subscribers', getDeviceId()), {
+        enabled: false,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      localStorage.setItem('dailyAshtonReminderEnabled', 'false');
+      window.__showToast('Daily reminder turned off');
+    } catch (err) {
+      console.error(err);
+      window.__showToast('Something went wrong turning off the reminder');
     }
   };
 
   // Foreground messages (app open and in view)
   if (messaging) {
     onMessage(messaging, (payload) => {
-      const body = payload.notification?.body || '';
+      const body = payload.data?.body || '';
       if (body) window.__showToast(body);
     });
   }

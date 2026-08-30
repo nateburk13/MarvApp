@@ -26,5 +26,4 @@ jobs:
       - name: Send today's quote
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          FCM_TOKENS: ${{ secrets.FCM_TOKENS }}
         run: npm run send-quote
