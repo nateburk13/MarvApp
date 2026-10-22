@@ -9,11 +9,10 @@ A tiny installable web app for iPhone that shows a daily quote from Elder Marvin
 | `index.html` | The app's layout and logic |
 | `quotes.json` | The quotes themselves — edit this to add, remove, or change quotes |
 | `manifest.json` | Lets iOS treat it as an installable app ("Add to Home Screen") |
-| `sw.js` | Service worker — enables offline caching |
-| `firebase-messaging-sw.js` | Second service worker — handles Firebase push notifications in the background |
+| `sw.js` | The app's single service worker — offline caching **and** showing the daily push notification |
 | `icon-192.png` / `icon-512.png` | Home screen app icons |
-| `scripts/send-daily-quote.js` | Node script that picks today's quote and sends it via Firebase |
-| `.github/workflows/daily-quote.yml` | GitHub Actions workflow that runs the script daily |
+| `scripts/send-daily-quote.js` | Node script that picks today's quote, waits for the exact send time, and sends it via Firebase to every subscribed device |
+| `.github/workflows/daily-quote.yml` | GitHub Actions workflow that starts the script shortly before the send time each day |
 | `package.json` | Lists the `firebase-admin` dependency the script needs |
 
 All files must stay in the same folder — the app links to them with relative paths.
@@ -51,7 +50,7 @@ iOS requires an `https://` URL to install a web app — `localhost` won't work f
 
 1. Open the deployed URL in **Safari** (must be Safari, not Chrome).
 2. Tap the **Share** icon → **Add to Home Screen**.
-3. Open the app from the new home screen icon, then tap **Enable Reminder** to allow notifications.
+3. Open the app from the new home screen icon and switch on the **Daily Reminder** toggle. Allow the notification permission prompt.
 
 ## Notes & limitations
 
@@ -60,18 +59,27 @@ iOS requires an `https://` URL to install a web app — `localhost` won't work f
 
 ## Daily push notifications (Firebase)
 
-Notifications are sent through Firebase Cloud Messaging, triggered once a day by a GitHub Actions workflow — no server to run yourself. This works for **any number of phones** — each one just needs its token added to the list.
+Notifications are sent through Firebase Cloud Messaging, triggered once a day by a GitHub Actions workflow — no server to run yourself. It works for **any number of phones**, and there are no tokens to copy around.
 
-**One-time setup (repeat "Get your device token" for every phone you want notified):**
-1. On each phone, open the app from the home screen (must be installed via Add to Home Screen first) and tap **Enable Reminder**. Allow the notification permission prompt.
-2. The app shows a long device token on screen. Copy it.
-3. In your GitHub repo, go to **Settings → Secrets and variables → Actions → New repository secret**, name it `FCM_TOKENS`, and paste the token as the value.
-4. **For additional phones**, edit that same `FCM_TOKENS` secret and add each new token on its own line (or separated by commas) — don't create a separate secret per phone.
-5. Add a second secret named `FIREBASE_SERVICE_ACCOUNT`, and paste the *entire contents* of the service account JSON file you downloaded from Firebase (Project Settings → Service Accounts → Generate new private key). This one is shared across all devices — only needed once.
-6. That's it — the workflow in `.github/workflows/daily-quote.yml` runs automatically every day and sends that day's quote to every token in `FCM_TOKENS`.
+**How it works:**
+1. On each phone, open the installed app and switch on the **Daily Reminder** toggle. The app gets a push token and saves it to the `subscribers` collection in Firestore with `enabled: true`.
+2. Switching the toggle off sets `enabled: false` for that device (the document is kept, not deleted).
+3. Each day the GitHub Actions workflow runs `scripts/send-daily-quote.js`, which reads every subscriber with `enabled == true` and sends them that day's quote.
 
-**Testing it without waiting for the schedule:** go to the repo's **Actions** tab → **Send daily quote notification** → **Run workflow** to trigger it manually.
+**One-time setup:**
+1. Create the Firebase project, enable Cloud Messaging and Firestore, and put the web app config and VAPID key in `index.html` and `sw.js`.
+2. In your GitHub repo, go to **Settings → Secrets and variables → Actions → New repository secret**, name it `FIREBASE_SERVICE_ACCOUNT`, and paste the *entire contents* of the service account JSON file (Firebase Project Settings → Service Accounts → Generate new private key). This is the only secret needed.
 
-**Changing the send time:** edit the `cron` line in `.github/workflows/daily-quote.yml`. Times are in UTC — for example `0 14 * * *` is 14:00 UTC, roughly 8:00 AM Mountain Time (adjust for your timezone and daylight saving).
+**Testing without waiting for the schedule:** go to the repo's **Actions** tab → **Send daily quote notification** → **Run workflow**. A manual run sends immediately.
 
-**If a token stops working**: FCM tokens can occasionally expire or get invalidated (e.g. a phone is reinstalled or Safari data is cleared). The workflow logs which specific token failed and why — check the Actions tab's run log. Have that phone reopen the app, tap **Enable Reminder** again, and swap in the new token for the old one in the `FCM_TOKENS` secret. A failed token for one phone won't stop the quote from sending to the others.
+**How the send time works:** GitHub's scheduled workflows are best-effort and often start 10–60 minutes late, so the workflow is deliberately scheduled early (`20 14 * * *`, i.e. 14:20 UTC) and the script then waits until the exact send time before sending. The target is **15:00 UTC = 8:00 AM Arizona time** (Arizona doesn't observe daylight saving, so this is the same all year). The wait is skipped if the run starts after the send time, or more than 90 minutes before it. Messages are sent with high urgency and a 1-hour TTL, so an undeliverable notification expires instead of arriving late.
+
+**Changing the send time:**
+1. Edit `SEND_HOUR_UTC` and `SEND_MINUTE_UTC` at the top of the wait logic in `scripts/send-daily-quote.js`.
+2. Edit the `cron` line in `.github/workflows/daily-quote.yml` so it starts about 40 minutes *before* the new send time. Pick an off-peak minute (not `:00`). Cron times are in UTC.
+
+For example, for 7:00 AM Arizona (14:00 UTC), set the script to hour `14`, minute `0`, and the cron to `20 13 * * *`.
+
+**If a device stops receiving notifications:** push tokens can be invalidated (e.g. the app was reinstalled or Safari data was cleared). The workflow log in the Actions tab shows which token failed and why. Have that phone open the app and switch the **Daily Reminder** toggle off and back on to register a fresh token. A failed token for one phone won't stop the quote from sending to the others.
+
+**Only one service worker:** `sw.js` must remain the only service worker for the app. A second one at the same scope (such as a separate `firebase-messaging-sw.js`) can replace or race with it, which causes stale subscriptions and duplicate notifications.
