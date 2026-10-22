@@ -29,6 +29,28 @@ function todaysQuote(quotes) {
   return quotes[idx];
 }
 
+// GitHub Actions cron is best-effort and can start late, so the workflow
+// starts ~40 min early and we wait here until the exact send time.
+// Send time: 15:00 UTC = 8:00 AM Arizona (no DST). If the run starts after
+// this time (or more than 90 min before it), we send immediately.
+const SEND_HOUR_UTC = 15;
+const SEND_MINUTE_UTC = 0;
+
+async function waitUntilSendTime() {
+  const now = new Date();
+  const target = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+    SEND_HOUR_UTC, SEND_MINUTE_UTC, 0
+  ));
+  const ms = target - now;
+  if (ms > 0 && ms < 90 * 60 * 1000) {
+    console.log(`Started early; waiting ${Math.round(ms / 1000)}s until ${target.toISOString()}`);
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  } else {
+    console.log('Past send time (or manual run); sending immediately.');
+  }
+}
+
 async function getEnabledTokens() {
   const snapshot = await db.collection('subscribers').where('enabled', '==', true).get();
   const tokens = [];
@@ -46,6 +68,10 @@ async function main() {
     throw new Error('quotes.json is empty or invalid');
   }
   const quote = todaysQuote(quotes);
+
+  // Wait first, then read tokens, so anyone who toggled on/off while we
+  // were waiting is reflected.
+  await waitUntilSendTime();
 
   const tokens = await getEnabledTokens();
   if (tokens.length === 0) {
@@ -68,6 +94,10 @@ async function main() {
       body: quote.text
     },
     webpush: {
+      // High urgency avoids iOS/FCM batching delays; TTL of 1 hour means a
+      // push that can't be delivered (phone off) expires instead of
+      // arriving stale in the afternoon.
+      headers: { Urgency: 'high', TTL: '3600' },
       fcmOptions: {
         link: '/'
       }
